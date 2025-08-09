@@ -6,21 +6,34 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  "http://localhost:5173",                   // الفرونت عندك على localhost
+  "https://chat-app-backend-by-ai-production.up.railway.app",       // ممكن تحط دومين الفرونت بعد الرفع هنا لو حابب
+  "*",                                       // مؤقت للسماح لأي دومين (تقدر تشيله لو حابب تشدد الأمان)
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // السماح لو origin موجود في allowedOrigins أو لو origin مش موجود (مثل Postman)
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+};
+
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // بيانات المستخدمين (وهمية)
@@ -59,7 +72,7 @@ const users = [
   }
 ];
 
-// ✅ تسجيل الدخول
+// تسجيل الدخول
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   const user = users.find((u) => u.email === email);
@@ -75,7 +88,7 @@ app.post("/api/auth/login", (req, res) => {
   });
 });
 
-// ✅ الحصول على الأصدقاء
+// الحصول على الأصدقاء
 app.get("/api/friends", (req, res) => {
   const currentUserEmail = req.query.email;
 
@@ -90,22 +103,19 @@ app.get("/api/friends", (req, res) => {
   res.json(friends);
 });
 
-// ✅ WebSocket Events
+// WebSocket Events
 io.on("connection", (socket) => {
   console.log("🔌 User connected:", socket.id);
 
-  // المستخدم ينضم لغرفة خاصة به
   socket.on("join", (user) => {
     socket.join(user.email);
     console.log(`✅ ${user.username} joined room: ${user.email}`);
   });
 
-  // إرسال رسالة من sender إلى receiver
   socket.on("sendMessage", (data) => {
     const { sender, receiver, content, createdAt } = data;
     console.log(`📩 ${sender} => ${receiver}: ${content}`);
 
-    // إرسال الرسالة فقط للمستلم
     io.to(receiver).emit("receiveMessage", {
       sender,
       receiver,
@@ -119,13 +129,13 @@ io.on("connection", (socket) => {
   });
 });
 
-// ✅ الصفحة الرئيسية
+// الصفحة الرئيسية
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// ✅ تشغيل السيرفر
-const PORT = 3001;
+// تشغيل السيرفر
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
